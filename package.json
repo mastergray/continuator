@@ -1,0 +1,22 @@
+{
+  "name": "continuator",
+  "version": "0.0.1-alpha",
+  "description": "Processes data in a continuation-like manner using CPS while also providing dynamic control similar to the actor model",
+  "main": "./src/index.js",
+  "type":"module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "staging": "nodemon --watch ./ -e js,json,ts ./test/index.js"
+  },
+  "keywords": [
+    "Continuations",
+    "Actors",
+    "Execution Control",
+    "CPS"
+  ],
+  "author": "mastergray",
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.1.3"
+  }
+}
