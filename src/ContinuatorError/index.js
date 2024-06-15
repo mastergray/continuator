@@ -86,11 +86,11 @@ export default class ContinuatorError extends Error {
     // Helper method for logging info determined by error type:
     static report(err) {
         if (err instanceof ContinuatorError) {
-                console.error(err.stack);
                 if (err.steps) {
-                    console.error("Last Step:", err.lastStep)  
                     console.error("All Steps:", err.steps)
-                }     
+                    console.error("Last Step:", err.lastStep)  
+                }
+                console.error(err.stack);     
         } else {
             console.error(err);
         }
