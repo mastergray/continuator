@@ -22,15 +22,9 @@ export default class Continuator {
 
     // SETTER :: [FUNCTION]|{ID:FUNCTION} -> VOID
     set steps(steps) {
-        if (Array.isArray(steps)) {
-            this._steps = steps;
-            this._stepsByID = steps.reduce((result, step, index) => {
-                result[index] = index;
-                return result;
-            }, {});
-        } else if (typeof(steps) === "object") {
+        if (Array.isArray(steps) || typeof(steps) === "object") {
             const {fns, stepsByID} = Object.entries(steps).reduce((result, [id, fn], index) => {
-                result.fns.push(fn);
+                result.fns.push(fn.bind(this))
                 result.stepsByID[id] = index;
                 return result;
             }, {
@@ -74,36 +68,80 @@ export default class Continuator {
      */
 
     // :: STRING, (value:*, next:* -> *, halt:* -> *, goto:STRING -> VOID) -> VOID | (value:*, next:* -> *, halt:* -> *, goto:STRING -> VOID) -> VOID -> this
-    // Adds "step" function to continuation:
+    // Adds "step" function to continuator:
     step(...args) {
 
         // Compute signature from arguments:
-        const [a, b] = args;
+        const [a, b, c] = args;
         const signature = Continuator.signature(args);
         
         // Match signature to how we need to handle those arguments:
         switch (signature) {
+
+            // Adds step function with step ID as index running in the context of "this" continuator:
             case "function":
-                this.steps.push(a)
+                this.steps.push(a.bind(this))
                 this.stepsByID[this.steps.length - 1] = this.steps.length - 1;
             break;
+            
+            // Adds step function with step ID as index running in the context of a given OBJECT:
+            case "function,object":
+                this.steps.push(a.bind(b))
+                this.stepsByID[this.steps.length - 1] = this.steps.length - 1;
+            break;
+
+            // Adds step function with step ID as STRING running in the context of  "this" continuator:
             case "string,function":
-                this.steps.push(b)
+                this.steps.push(b.bind(this))
                 this.stepsByID[a] =  this.steps.length - 1;
             break;
-            default:
 
+            // Adds step function with step ID as STRING running in the context of a given OBJECT:
+            case "string,function,object":
+                this.steps.push(b.bind(c))
+                this.stepsByID[a] =  this.steps.length - 1;
+            break;
+
+            // Throw an error for an unsupported signature:
+            default:
+                throw new Error(`Invalid Step Signature: ${signature}`)
         }
         
         // Make method "chainable":
         return this;
     }
 
+    // :: NUMBER|STRING -> this
+    // Removes step by step ID or index otherwise throws an error if step can't be removed:
+    removeStep(stepID) {
+
+        // Get index using stepID:
+        const index = this.stepsByID[stepID];
+
+        // Remove step if it exists:
+        if (index !== undefined) {
+
+            // Remove step function:
+            this.steps.splice(index, 1);
+
+            // Remove step ID:
+            delete this.stepsByID[index];
+            
+            // Make method chainable:
+            return this;
+
+        } 
+
+        // Otherwise throw an error if step is undefined:
+        throw new Error("Cannot remove step of unknown ID");
+
+    }
+
     // :: Continuator, BOOL|VOID -> this
     // Composes the steps of a given Continuator instance with this instance:
     // NOTE: If overwrite is true, steps By ID will be overwrriten for this instance
     // NOTE: If step has no explicit ID, then a new stepID is computed based on the index of this instance:
-    // NOTE: This means if the composed with instance is referencing  steps by index - they aren't guarnteed to work with the updated index:
+    // WARNING: This means if the composed with instance is referencing  steps by index - they aren't guarnteed to work with the updated index:
     compose(cont, overwrite) {
         Object.entries(cont.stepsByID).forEach(([stepID, stepIndex]) => {
             if (isNaN(parseInt(stepID))) {
@@ -123,51 +161,68 @@ export default class Continuator {
         return this;
     }
 
-    // :: *, (* -> *) -> *
-    // Applies steps of this continuation to a given value, otherwise runs given function if continuation is terminated:
-    run(intialValue, onHalt) {
+    // :: *, (* -> *) -> PROMISE(*)
+    // Returns promise of applying steps of this continuator to a given value, otherwise runs given function if continuator is "halted":
+    // NOTE: "Halting" a continuator is not the same as throwing an exception - it means we are terminating the continutar before all steps function have been applied to the inital vale
+    // NOTE: When a continuator is terminated by "halting" a step - the continuator returns a promise for the "halted" value or the applied "onHalt" function to the "halted" value
+    async run(intialValue, onHalt) {
 
         let step = 0;             // Keeps track of step count
         let value = intialValue;  // Reference to value that steps are being applied to
-        let halted = false;       // Determines if continuation has terminated or not          
+        let halted = false;       // Determines if continuator has terminated or not          
 
-        // How to process next step of continuation:
-        const nextStep = (nextValue) => {
-            if (!halted) {
-                value = nextValue;
-                step += 1;
-            }
-        }
+        // Iteratively awaits each application of a step function to the value :
+        while (step < this.steps.length && !halted) {
+            
+            // Promise of value is resolved when any of the functions passed to the step function is resolved:
+            value = await new Promise((resolve, reject) => {
+                
+                try {
 
-        // How to handle terminated continuation:
-        const haltStep = (haltValue) => {
-            halted = true; 
-            value = typeof(onHalt) === "function" 
-                ? onHalt(haltValue)
-                : haltValue
-        }
+                    // Step function we are currently processing:
+                    this.steps[step](
 
-        // How to call a specific step function by ID
-        const gotoStep =(stepID) => {
-            if (!halted) {
-                step = this.stepsByID[stepID];
-                if (step === undefined) {
-                    throw new Error("No Step Found For Given ID");
+                        // Value being passed to step funciton:
+                        value, 
+
+                        // "Next" function that can be called from step:
+                        (nextValue) => {
+                            if (!halted) {
+                                step += 1;
+                                resolve(nextValue);
+                            }
+                        },
+
+                        // "Halt" function that can be called from step:
+                        (haltValue) => {
+                            halted = true; 
+                            typeof(onHalt) === "function"
+                                ? resolve(onHalt(haltValue)) 
+                                : resolve(haltValue);
+                        },
+
+                        // "Goto" function can be called from step:
+                        (gotoValue) => {
+                            step = this.stepsByID[gotoValue]
+                            step !== undefined
+                                ? resolve(value)
+                                : reject("No Step Found For Given ID")
+                        }
+
+                    );
+                    
+                } catch (err) {
+                    
+                    // Rejects promise if step function itself throws an error:
+                    reject(err);
+
                 }
-            }
+
+            });
         }
 
-        // Process each step of the continuation using a deferred function to avoid recursive stack overflow:
-        const processStep = () => {
-            if (step < this.steps.length && !halted) {
-                this.steps[step](value, nextStep, haltStep, gotoStep);
-                return () => processStep();
-            }
-            return value;
-        };
-
-        // Return processed value of continuation:
-        return Continuator.trampoline(processStep)();
+        // Returns promise of processed value: 
+        return value;
 
     }
 
@@ -182,31 +237,7 @@ export default class Continuator {
         return new Continuator(steps);
     }
 
-    // :: FUNCTION -> * -> *
-    // Implement a trampoline for preventing recursive stack overflow:
-    static trampoline(fn) {
-        return (...args) => {
-            let result = fn(...args);
-            while (typeof result === 'function') {
-                result = result();
-            }
-            return result;
-        };
-    }
-    
-    // :: VOID -> VOID
-    // Helper function for logging value of Continuator:
-    // NOTE: We check type of next so we can use this as "halt" handler as well:
-    static log(value, next, halt) {
-        console.log(value);
-        if (typeof(next) === "function") {
-            next(value);
-        } else {
-            return value;
-        }
-    }
-
-    // :: [*] -> [STRING]
+     // :: [*] -> [STRING]
     // Generates "signature" from an array of values
     // NOTE: This is needed for implementing method overriding using generic dispatch:
     static signature(val) {
@@ -217,6 +248,18 @@ export default class Continuator {
             }).join(',');
         } else {
             throw new Error(`Can Only Compute A Signature From An ARRAY Of Values`);
+        }
+    }
+
+    // :: VOID -> VOID
+    // Helper function for logging value of Continuator:
+    // NOTE: We check type of next so we can use this as "halt" handler as well:
+    static log(value, next, halt) {
+        console.log(value);
+        if (typeof(next) === "function") {
+            next(value);
+        } else {
+            return value;
         }
     }
 

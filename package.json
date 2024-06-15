@@ -1,7 +1,7 @@
 {
   "name": "continuator",
-  "version": "0.0.1-alpha",
-  "description": "Processes data in a continuation-like manner using CPS while also providing dynamic control similar to the actor model",
+  "version": "0.0.2-alpha",
+  "description": "A practical synthesis of continuation-like flow control with dynamic actor-like behaviors using a fluent CPS-inspired interface",
   "main": "./src/index.js",
   "type":"module",
   "scripts": {
@@ -11,8 +11,11 @@
   "keywords": [
     "Continuations",
     "Actors",
-    "Execution Control",
-    "CPS"
+    "Combinators",
+    "CPS",
+    "Flow Control",
+    "Data Processing",
+    "State Machines"
   ],
   "author": "mastergray",
   "license": "MIT",
