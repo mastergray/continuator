@@ -1,93 +1,207 @@
-## Continuator
+# Continuator
 
-The `Continuator` class is a versatile JavaScript utility designed to manage and control the flow of computations using a combination of continuation-passing style (CPS) and actor-like behavior. It allows for the dynamic addition, removal, and jumping between steps in a sequence of functions, providing a powerful mechanism to handle complex workflows, state transitions, and both synchronous and asynchronous operations.
+`Continuator` is a JavaScript library designed to manage complex execution flows using a sequence of steps (functions) applied to a value. It provides a flexible mechanism to handle continuation-like execution control, dynamic actor-like behaviors, and combinator-like composition. This makes it particularly useful for scenarios requiring adaptive, non-linear, and asynchronous processing.
 
-### Key Features
+## How It Works
 
-- **Dynamic Step Management**: Easily add, remove, and reference steps in the computation.
-- **Control Flow Functions**: Use `nextStep`, `haltStep`, and `gotoStep` to navigate the computation.
-- **Trampoline for Recursion**: Prevent stack overflow in deep recursive calls with a trampoline function.
-- **Synchronous and Asynchronous Handling**: Seamlessly handle both synchronous and asynchronous steps.
-- **Composable**: Combine multiple `Continuator` instances to create complex workflows.
+The `Continuator` class allows you to define a series of steps that can be applied to a value. Each step is a function that can:
+- Continue to the next step using the `next` function.
+- Halt the execution using the `halt` function.
+- Redirect to a different step using the `goto` function.
 
-### How It Works
+These steps can be composed, removed, and managed dynamically, providing a high degree of control over the execution flow. Steps can be added either through the constructor or by chaining the `step` method.
 
-- **Initialization**: Initialize with an array of functions or an object mapping IDs to functions.
-- **Execution**: Run the computation from an initial value, using control functions to manage flow.
-- **Dynamic Control**: Jump to specific steps, halt the computation, or proceed to the next step based on conditions.
+## Where to Apply It
 
-### Example Usage
+`Continuator` is suitable for:
+- **Complex Workflows**: Managing intricate sequences of operations that require dynamic control flow.
+- **Asynchronous Processing**: Handling tasks that involve asynchronous operations, such as network requests or file I/O.
+- **Stateful Pipelines**: Implementing pipelines that need to maintain and transform state across multiple steps.
+- **Error Handling**: Providing robust error handling and recovery mechanisms within a sequence of operations.
 
-#### Synchronous Functions
+
+## Usage Examples
+
+**Example 1: Basic Usage**
 
 ```javascript
+import Continuator, {ContinuatorError} from 'continuator';
+
+// Define step functions
 const step1 = (value, next, halt, goto) => {
-    console.log("Step 1:", value);
-    if (value < 5) {
-        next(value + 1);
+    if (value > 10) {
+        next(value * 2);
     } else {
-        goto("specialStep");
+        halt('Value is too small');
     }
 };
 
-const specialStep = (value, next, halt, goto) => {
-    console.log("Special Step:", value);
-    halt(value);
+const step2 = (value, next, halt, goto) => {
+    next(value + 5);
 };
 
-const steps = [step1, specialStep];
-const continuator = new Continuator(steps);
-continuator.run(0);
+// Initialize the Continuator
+Continuator([step1, step2]);
+
+// Run the pipeline
+pipeline.run(15)
+    .then(result => {
+        console.log('Pipeline result:', result);
+    })
+    .catch(err => {
+        if (err instanceof ContinuatorError) {
+            err.report();
+        } else {
+            console.error('Unexpected error:', err);
+        }
+    });
 ```
 
-#### Asynchronous Functions
+**Example 2: Using `goto` for Non-Linear Execution**
 
 ```javascript
-const asyncStep1 = async (value, next, halt, goto) => {
-    console.log("Async Step 1:", value);
-    if (value < 5) {
-        next(await someAsyncFunction(value + 1));
+import Continuator from 'continuator';
+
+const step1 = (value, next, halt, goto) => {
+    if (value > 10) {
+        goto('step3');
     } else {
-        goto("specialStep");
+        next(value * 2);
     }
 };
 
-const asyncSpecialStep = async (value, next, halt, goto) => {
-    console.log("Async Special Step:", value);
-    halt(await someAsyncFinalFunction(value));
+const step2 = (value, next, halt, goto) => {
+    next(value + 5);
 };
 
-const someAsyncFunction = (value) => new Promise(resolve => setTimeout(() => resolve(value), 1000));
-const someAsyncFinalFunction = (value) => new Promise(resolve => setTimeout(() => resolve(value * 2), 1000));
+const step3 = (value, next, halt, goto) => {
+    halt('Jumped to step3');
+};
 
-const asyncSteps = [asyncStep1, asyncSpecialStep];
-const asyncContinuator = new Continuator(asyncSteps);
-
-asyncContinuator.run(0).then(result => {
-    console.log("Final Result:", result);
+const pipeline = new Continuator({
+    step1,
+    step2,
+    step3
 });
+
+pipeline.run(15)
+    .then(result => {
+        console.log('Pipeline result:', result);
+    })
+    .catch(err => {
+        console.error('Pipeline error:', err);
+    });
 ```
 
-#### Composing Continuators
+**Example 3: Composing Continuators**
 
 ```javascript
+import Continuator from 'continuator';
+
 const stepA = (value, next, halt, goto) => {
-    console.log("Step A:", value);
     next(value + 1);
 };
 
 const stepB = (value, next, halt, goto) => {
-    console.log("Step B:", value);
-    halt(value * 2);
+    next(value * 2);
 };
 
-const continuatorA = new Continuator([stepA]);
-const continuatorB = new Continuator([stepB]);
+const pipeline1 = new Continuator([stepA]);
+const pipeline2 = new Continuator([stepB]);
 
-continuatorA.compose(continuatorB);
-continuatorA.run(1);
+pipeline1.compose(pipeline2);
+
+pipeline1.run(5)
+    .then(result => {
+        console.log('Composed pipeline result:', result); // Should output 12
+    })
+    .catch(err => {
+        console.error('Pipeline error:', err);
+    });
+```
+
+**Example 4: Debugging a Pipeline**
+
+```javascript
+import Continuator from 'continuator';
+
+const step1 = (value, next, halt, goto) => {
+    next(value * 2);
+};
+
+const step2 = (value, next, halt, goto) => {
+    if (value > 20) {
+        halt('Value too large');
+    } else {
+        next(value + 5);
+    }
+};
+
+const pipeline = new Continuator([step1, step2]);
+
+pipeline.debug(15)
+    .then(result => {
+        console.log('Debug pipeline result:', result);
+    })
+    .catch(err => {
+        if (err instanceof ContinuatorError) {
+            err.report();
+        } else {
+            console.error('Unexpected error:', err);
+        }
+    });
+```
+
+**Example 5: Chaining Steps**
+
+```javascript
+import Continuator from 'continuator';
+import ContinuatorError from 'continuator-error';
+
+// Define step functions
+const step1 = (value, next, halt, goto) => {
+    if (value > 10) {
+        next(value * 2);
+    } else {
+        halt('Value is too small');
+    }
+};
+
+const step2 = (value, next, halt, goto) => {
+    next(value + 5);
+};
+
+const step3 = (value, next, halt, goto) => {
+    if (value > 30) {
+        halt('Value is too large');
+    } else {
+        next(value);
+    }
+};
+
+// Initialize an empty Continuator
+const pipeline = new Continuator();
+
+// Chain steps together
+pipeline
+    .step(step1)
+    .step(step2)
+    .step(step3);
+
+// Run the pipeline
+pipeline.run(15)
+    .then(result => {
+        console.log('Pipeline result:', result); // Should output 35
+    })
+    .catch(err => {
+        if (err instanceof ContinuatorError) {
+            err.report();
+        } else {
+            console.error('Unexpected error:', err);
+        }
+    });
 ```
 
 ## Notice
 
-`Continuator` is very much a work in progress. Things seems to be stable but there is still much testing and benchmarking to be done. Documentation is also in draft right now given it's being produced by ChatGPT - but at least it's something for now. 
+`Continuator` is very much a work in progress. Things seems to be stable but there is still much testing and benchmarking to be done. Documentation is also in draft right now given it's being produced by ChatGPT - but at least it's something for 
