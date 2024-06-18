@@ -38,3 +38,7 @@ test.json
 test.js
 test/
 archive/
+
+# Docs
+src/Continuator/README.md  
+src/ContinuatorError/README.md
