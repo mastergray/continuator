@@ -137,10 +137,11 @@ export default class Continuator {
         } 
 
         // Otherwise throw an error if step is undefined:
-        throw new Error("Cannot remove step of unknown ID");
+        throw new ContinuatorError("Cannot remove step of unknown ID");
 
     }
 
+    
     // :: NUMBER -> STRING|NULL
     // Returns step ID from given index, otherwise returns NULL if no step ID is found:
     stepIDByIndex(index) {
